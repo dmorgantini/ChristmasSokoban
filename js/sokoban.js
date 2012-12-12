@@ -143,18 +143,30 @@ GameScene = pc.Scene.extend('GameScene',
         playerSpatial:null,
         displayedWin:false,
         starSheet:null,
+        currentLevel: null,
 
         init:function () {
             this._super();
-
-
+            pc.device.input.bindState(this, 'mouseclick', 'MOUSE_LEFT_BUTTON');
             this.entityFactory = new EntityFactory();
+            this.loadLevel('level1');
 
+        },
 
-            //-----------------------------------------------------------------------------
-            // tiles layer
-            //-----------------------------------------------------------------------------
-            this.loadFromTMX(pc.device.loader.get('level1').resource, this.entityFactory);
+        loadLevel:function (lvl) {
+            this.currentLevel = lvl;
+            var next = this.layers.first;
+            while (next) {
+                if (next.obj.reset) next.obj.reset();
+                next = next.next();
+            }
+
+            this.layers.clear();
+            this.activeLayers.clear();
+
+            this.displayedWin = false;
+
+            this.loadFromTMX(pc.device.loader.get(lvl).resource, this.entityFactory);
 
             this.tileLayer = this.get('tiles');
             this.tileLayer.setZIndex(11);
@@ -190,7 +202,6 @@ GameScene = pc.Scene.extend('GameScene',
             var starsImage = pc.device.loader.get('stars').resource;
             this.starSheet = new pc.SpriteSheet({sourceX:20, image:starsImage, frameWidth:20, frameHeight:20, framesWide:3, framesHigh:3});
 
-            pc.device.input.bindState(this, 'restart', 'MOUSE_LEFT_BUTTON');
         },
 
         process:function () {
@@ -198,7 +209,12 @@ GameScene = pc.Scene.extend('GameScene',
             var hasWon = this.checkWinner();
 
             var restartButton = this.finishLayer.entityManager.getTagged('RESTART').first.object();
-//            if (!this.displayedWin) {
+            var nextLevelButton;
+
+            if (this.finishLayer.entityManager.getTagged('NEXT_LEVEL')) {
+                nextLevelButton = this.finishLayer.entityManager.getTagged('NEXT_LEVEL').first.object();
+            }
+
             if (hasWon && !this.displayedWin) {
                 this.displayedWin = true;
                 var tree = this.finishLayer.entityManager.getTagged('TREE').first.object();
@@ -224,12 +240,25 @@ GameScene = pc.Scene.extend('GameScene',
 
             }
 
-            if (pc.device.input.isInputState(this, 'restart') && restartButton.getComponent('spatial').getScreenRect().containsPoint(pc.device.input.mousePos)) {
-                this.init();
+            if (pc.device.input.isInputState(this, 'mouseclick')) {
+                this.handleMouseClick(restartButton, nextLevelButton, hasWon);
             }
 
             // always call the super
             this._super();
+        },
+
+        handleMouseClick:function (restartButton, nextLevelButton, hasWon) {
+            if (restartButton && restartButton.getComponent('spatial').getScreenRect().containsPoint(pc.device.input.mousePos)) {
+                if (!hasWon)
+                    this.loadLevel(this.currentLevel);
+                else
+                    this.loadLevel('level1');
+            }
+
+            if (nextLevelButton && nextLevelButton.getComponent('spatial').getScreenRect().containsPoint(pc.device.input.mousePos)) {
+                this.loadLevel('level2');
+            }
         },
 
         checkWinner:function () {
@@ -263,6 +292,7 @@ EntityFactory = pc.EntityFactory.extend('EntityFactory', {},
         santaSheet:null,
         treeSheet:null,
         playagainSheet:null,
+        nextLevelSheet:null,
 
         init:function () {
             this.packageSheet = new pc.SpriteSheet({image:pc.device.loader.get('package').resource, useRotation:false});
@@ -277,6 +307,7 @@ EntityFactory = pc.EntityFactory.extend('EntityFactory', {},
 
             this.treeSheet = new pc.SpriteSheet({image:pc.device.loader.get('tree').resource});
             this.playagainSheet = new pc.SpriteSheet({image:pc.device.loader.get('play_again').resource});
+            this.nextLevelSheet = new pc.SpriteSheet({image:pc.device.loader.get('next_level').resource});
 
         },
         createEntity:function (layer, type, x, y, dir) {
@@ -342,6 +373,16 @@ EntityFactory = pc.EntityFactory.extend('EntityFactory', {},
                         }));
                     return e;
 
+                case 'nextlevel':
+                    e = pc.Entity.create(layer);
+                    e.addTag('NEXT_LEVEL');
+                    e.addComponent(pc.components.Spatial.create({x:x, y:y, dir:0, w:this.playagainSheet.frameWidth, h:this.playagainSheet.frameHeight}));
+                    e.addComponent(pc.components.Sprite.create(
+                        {
+                            spriteSheet:this.nextLevelSheet
+                        }));
+                    return e;
+
                 case 'santa':
                     e = pc.Entity.create(layer);
                     e.addTag('SANTA');
@@ -384,8 +425,10 @@ TheGame = pc.Game.extend('TheGame',
             pc.device.loader.add(new pc.Image('basic', 'images/tiles.png'));
             pc.device.loader.add(new pc.Image('background', 'images/background.png'));
             pc.device.loader.add(new pc.Image('play_again', 'images/startbutton.png'));
+            pc.device.loader.add(new pc.Image('next_level', 'images/button_neu.png'));
 
             pc.device.loader.add(new pc.DataResource('level1', 'data/level1.tmx'));
+            pc.device.loader.add(new pc.DataResource('level2', 'data/level2.tmx'));
 
             this.loadingScene = new pc.Scene();
             this.loadingLayer = new pc.Layer('loading');
